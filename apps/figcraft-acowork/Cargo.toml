@@ -1,0 +1,24 @@
+[package]
+name = "figcraft-acowork"
+description = "ACowork hosted-app host for FigCraft: loopback HTTP /health + /ui/ (ADR-116)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "figcraft-acowork"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+log = { workspace = true }
+serde_json = { workspace = true }
+env_logger = { version = "0.11", default-features = false, features = ["humantime"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "time"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json"] }
+tower-http = { version = "0.6", features = ["fs"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
