@@ -21,10 +21,13 @@ if [[ -z "$OUT_DIR" ]]; then
 fi
 
 echo "Building figcraft-acowork (release)..."
-(cd "$ROOT" && cargo build -p figcraft-acowork --release)
-
-BIN_SRC="$ROOT/target/release/figcraft-acowork"
-[[ -f "$BIN_SRC" ]] || { echo "missing $BIN_SRC"; exit 1; }
+(
+  cd "$ROOT"
+  cargo build -p figcraft-acowork --release
+)
+TARGET_DIR="$(cd "$ROOT" && cargo metadata --format-version 1 --no-deps | python -c "import json,sys; print(json.load(sys.stdin)['target_directory'])")"
+BIN_SRC="$TARGET_DIR/release/figcraft-acowork"
+[[ -f "$BIN_SRC" ]] || { echo "missing $BIN_SRC (target_directory=$TARGET_DIR)"; exit 1; }
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/bin" "$OUT_DIR/ui" "$OUT_DIR/assets"

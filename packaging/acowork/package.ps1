@@ -17,13 +17,14 @@ Write-Host "Building figcraft-acowork (release)..."
 Push-Location $Root
 try {
     cargo build -p figcraft-acowork --release
+    $targetDir = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory
 } finally {
     Pop-Location
 }
 
-$binSrc = Join-Path $Root "target\release\figcraft-acowork.exe"
+$binSrc = Join-Path $targetDir "release\figcraft-acowork.exe"
 if (-not (Test-Path $binSrc)) {
-    throw "missing $binSrc"
+    throw "missing $binSrc (target_directory=$targetDir)"
 }
 
 $stage = $OutDir
