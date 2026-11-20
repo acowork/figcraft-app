@@ -1,7 +1,7 @@
 id = "figcraft"
-version = "0.18.1"
-name = "FigCraft"
-description = "Open-source interface design and prototyping for ACowork"
+version = "0.18.2"
+name = "FigCraft (ACowork)"
+description = "ACowork hosted adaptation of FigCraft - interface design and prototyping. Based on FigCraft by the ArtCraft team; not an ArtCraft product."
 icon = "figcraft"
 builtin = false
 
@@ -15,15 +15,19 @@ health_path = "/health"
 [mcp]
 path = "/mcp"
 protocol = "streamable-http"
-auto_inject = false
+auto_inject = true
 gateway_path = "/api/apps/figcraft/mcp"
 
 [ui]
 path = "/ui/"
 mode = "webview"
 
+[ui.canvas]
+kind = "visual"
+preview_path = "/?file={workspace_file}"
+
 [ui.nav]
-label = "FigCraft"
+label = "FigCraft (ACowork)"
 icon = "figcraft"
 order = 40
 

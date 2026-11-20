@@ -1,17 +1,10 @@
-<p align="center">
-  <a href="https://getartcraft.com/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/brand/artcraft-logo-white.png">
-      <img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/brand/artcraft-logo.png" width="200">
-    </picture>
-  </a>
-</p>
+> **ACowork hosted adaptation.** This fork packages FigCraft so ACowork can install it as a hosted app. Public name: **FigCraft (ACowork)**. It is based on FigCraft by the ArtCraft team and is **not** an ArtCraft product. Hosted-app notes: [ACOWORK.md](ACOWORK.md). Upstream: [storytold/figcraft](https://github.com/storytold/figcraft).
 
 <p align="center">
   <img src="assets/app-icon/hicolor/256x256/apps/ai.storyteller.figcraft.png" width="128" height="128" alt="FigCraft icon: an engraved chameleon on a mint-green tile">
 </p>
 
-<h1 align="center">FigCraft</h1>
+<h1 align="center">FigCraft (ACowork)</h1>
 
 <p align="center">
   <b>Interface design and prototyping: open source, collaborative and built in pure Rust.</b><br>
@@ -30,13 +23,9 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
-</p>
-
-<p align="center">
-  <a href="https://getartcraft.com/apps/figcraft"><b>FigCraft on getartcraft.com</b></a> ·
-  <a href="https://getartcraft.com/">ArtCraft</a> ·
-  <a href="https://getartcraft.com/apps">All Crafting Apps</a>
+  <a href="https://github.com/acowork/figcraft-app"><b>ACowork fork</b></a> ·
+  <a href="https://github.com/storytold/figcraft">Upstream FigCraft</a> ·
+  <a href="ACOWORK.md">Hosted-app notes</a>
 </p>
 
 <br>
@@ -308,7 +297,10 @@ The default server's terms are in [`docs/online-sharing-terms.md`](docs/online-s
 
 ## The Crafting Apps
 
-FigCraft is one of the **Crafting Apps**: free, open-source creative tools from the
+The list below is the **upstream** FigCraft project and its sibling tools from the
+ArtCraft team. This ACowork fork is not part of that suite and is not an ArtCraft product.
+
+Upstream FigCraft is one of the **Crafting Apps**: free, open-source creative tools from the
 [ArtCraft](https://getartcraft.com/) team, each written from scratch in Rust and each able to
 stand on its own.
 
@@ -331,30 +323,20 @@ stand on its own.
 | <img src="https://raw.githubusercontent.com/storytold/craft-anything/main/assets/app-icon/hicolor/64x64/apps/ai.storyteller.craft-anything.png" alt="" width="32" height="32"> | **Craft Anything** | See how any software works, then build your own | [GitHub](https://github.com/storytold/craft-anything) | [Website](https://getartcraft.com/apps/craft-anything) |
 | <img src="https://raw.githubusercontent.com/tangency-labs/solidcraft/main/assets/icons/app/linux/exports/hicolor/64x64/apps/io.tangencylabs.solidcraft.png" alt="" width="32" height="32"> | **SolidCraft** | Parametric 3D CAD by Tangency Labs (community app) | [GitHub](https://github.com/tangency-labs/solidcraft) | |
 
-And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video studio for artists who want real control.
+And [**ArtCraft**](https://getartcraft.com/) itself, the ArtCraft team's AI image and video studio.
 
 The Crafting Apps share the same conventions: clean-room and pure Rust, native on macOS, Windows, Linux and FreeBSD, in the browser via WebAssembly, and fully drivable by agents.
 
-<br>
+<h3 align="center">Upstream community</h3>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
-</p>
-
-<h3 align="center">Come make things with us</h3>
-
-<p align="center">
-  Our Discord is where people who make things hang out: designers sketching their first app,
-  developers who just want a button to look right, illustrators, filmmakers, type nerds, and
-  plenty of people still working out what they like to make. Share what you're building, ask for
-  help, tell us what's broken or what you wish FigCraft could do. You're welcome here.
+  The ArtCraft team's FigCraft Discord is where the upstream project talks. This ACowork
+  adaptation is not that community and does not speak for ArtCraft.
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><b>discord.gg/artcraft</b></a> ·
-  <a href="https://getartcraft.com/">getartcraft.com</a> ·
-  <a href="https://getartcraft.com/apps">The Crafting Apps</a> ·
-  <a href="https://getartcraft.com/apps/figcraft">FigCraft</a>
+  <a href="https://github.com/storytold/figcraft">Upstream FigCraft</a> ·
+  <a href="https://discord.gg/artcraft">upstream Discord</a>
 </p>
 
 ---
@@ -369,14 +351,11 @@ assets keep their own open licenses; each one is listed with its author, source 
 [ATTRIBUTION.md](ATTRIBUTION.md).
 
 The ArtCraft name, wordmark and logos in [`docs/brand/`](docs/brand/) are trademarks of the
-ArtCraft Team and are not covered by this license. They may be used only unmodified, and only as
-part of this repository and FigCraft, under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
-Forks and modified versions must remove them.
+ArtCraft Team and are not covered by this license. This ACowork adaptation does not use them.
+Upstream terms: [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
 
-<p align="center">
-  <a href="https://getartcraft.com/"><img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/brand/artcraft-mark.png" width="28"></a><br>
-  <sub>Made by the <a href="https://getartcraft.com/">ArtCraft</a> team and community.</sub>
-</p>
+This repository is based on FigCraft by the ArtCraft team. It is published by ACowork and is not
+an ArtCraft product.
 
 ## Star history
 

@@ -1,6 +1,6 @@
 [package]
 name = "figcraft-acowork"
-description = "ACowork hosted-app host for FigCraft: loopback HTTP /health + /ui/ (ADR-116)"
+description = "ACowork hosted FigCraft process: loopback HTTP /health + /ui/ + workspace-confined MCP (ADR-116/118). Not an ArtCraft product."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,7 +18,10 @@ clap = { workspace = true }
 log = { workspace = true }
 serde_json = { workspace = true }
 env_logger = { version = "0.11", default-features = false, features = ["humantime"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "time", "sync"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json"] }
 tower-http = { version = "0.6", features = ["fs"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+figcraft-mcp = { workspace = true }
+figcraft-engine = { workspace = true }
+base64 = { workspace = true }

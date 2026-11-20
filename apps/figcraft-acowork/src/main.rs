@@ -1,29 +1,35 @@
-//! ACowork-hosted FigCraft process (ADR-116 generic runtime).
+//! ACowork-hosted FigCraft process (ADR-116 generic runtime, ADR-118 dual canvas).
 //!
 //! Speaks the Gateway generic-supervisor CLI contract (`--host` / `--port` /
 //! `--port-file` / `--gateway-health-url` / `--log-level`) and serves:
 //! - `GET /health` — supervisor liveness
-//! - `GET /ui/*` — static web UI (Trunk build of `figcraft-web`, or placeholder)
-//! - `POST /mcp` — empty tools catalog (`auto_inject = false` in app.toml)
+//! - `GET /ui/*` — static web UI already packed beside the binary, with an
+//!   injected ACowork theme/openFile bridge (upstream `index.html` is not edited)
+//! - `POST /mcp` — `figcraft-mcp::Server` confined to `X-MCP-Workspace-Root`
 //!
 //! The UI directory is resolved as: `--ui-dir` → sibling `../ui` of this
 //! binary (package layout) → `./ui`.
+
+mod mcp;
+mod ui;
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use axum::Router;
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use clap::Parser;
 use tower_http::services::{ServeDir, ServeFile};
 
+use crate::mcp::McpHub;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "figcraft-acowork",
-    about = "FigCraft host process for ACowork (loopback HTTP, ADR-116)"
+    about = "ACowork hosted FigCraft process (loopback HTTP, ADR-116). Not an ArtCraft product."
 )]
 struct Cli {
     /// Loopback bind address (Gateway always passes 127.0.0.1)
@@ -73,16 +79,14 @@ async fn main() {
         );
     }
 
-    let index = ui_dir.join("index.html");
-    let ui_service = ServeDir::new(&ui_dir)
-        .append_index_html_on_directories(true)
-        .fallback(ServeFile::new(index));
-
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/mcp", post(mcp_stub))
-        .nest_service("/ui", ui_service)
-        .layer(axum::middleware::from_fn(wasm_content_type));
+    match McpHub::spawn() {
+        Ok(h) => h.install(),
+        Err(e) => {
+            log::error!("{e}");
+            std::process::exit(1);
+        }
+    };
+    let app = build_router(&ui_dir);
 
     let listener = match bind_with_fallback(&cli.host, cli.port).await {
         Ok(l) => l,
@@ -126,19 +130,37 @@ fn resolve_ui_dir(explicit: Option<&Path>) -> PathBuf {
         return p.to_path_buf();
     }
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(bin_dir) = exe.parent() {
-            let sibling = bin_dir.join("..").join("ui");
-            if let Ok(canon) = sibling.canonicalize() {
-                if canon.is_dir() {
-                    return canon;
-                }
-            }
-            if sibling.is_dir() {
-                return sibling;
-            }
+        let sibling = ui_dir_beside_binary(&exe);
+        if let Ok(canon) = sibling.canonicalize()
+            && canon.is_dir()
+        {
+            return canon;
+        }
+        if sibling.is_dir() {
+            return sibling;
         }
     }
     PathBuf::from("ui")
+}
+
+/// Package layout is `{version}/bin/<binary>` next to `{version}/ui/`.
+fn ui_dir_beside_binary(exe: &Path) -> PathBuf {
+    match exe.parent() {
+        Some(bin_dir) => bin_dir.join("..").join("ui"),
+        None => PathBuf::from("ui"),
+    }
+}
+
+fn build_router(ui_dir: &Path) -> Router {
+    let index = ui_dir.join("index.html");
+    let ui_service = ServeDir::new(ui_dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(index));
+    Router::new()
+        .route("/health", get(health))
+        .route("/mcp", post(mcp::mcp_handler))
+        .nest_service("/ui", ui_service)
+        .layer(axum::middleware::from_fn(ui::ui_response_layer))
 }
 
 fn ensure_placeholder_ui(ui_dir: &Path) {
@@ -182,66 +204,31 @@ async fn health() -> impl IntoResponse {
     }))
 }
 
-/// Minimal Streamable-HTTP MCP stub. FigCraft is UI-first; tools come later.
-async fn mcp_stub(body: axum::body::Bytes) -> Response {
-    let req: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
-    let id = req.get("id").cloned().unwrap_or(serde_json::Value::Null);
-    let method = req
-        .get("method")
-        .and_then(|m| m.as_str())
-        .unwrap_or("");
-
-    let result = match method {
-        "initialize" => serde_json::json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": { "tools": {} },
-            "serverInfo": { "name": "figcraft", "version": env!("CARGO_PKG_VERSION") },
-        }),
-        "notifications/initialized" => {
-            return StatusCode::ACCEPTED.into_response();
-        }
-        "tools/list" => serde_json::json!({ "tools": [] }),
-        "ping" => serde_json::json!({}),
-        _ => {
-            let err = serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": { "code": -32601, "message": format!("Method not found: {method}") },
-            });
-            return (StatusCode::OK, axum::Json(err)).into_response();
-        }
-    };
-
-    (
-        StatusCode::OK,
-        axum::Json(serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "result": result,
-        })),
-    )
-        .into_response()
+/// Headers the Desktop iframe needs. The frame is sandboxed without
+/// `allow-same-origin`, so its origin is opaque and every script or wasm
+/// fetch is cross-origin. Module and wasm responses must opt into that
+/// fetch, and wasm must be `application/wasm` or the browser will not
+/// stream-compile it.
+pub(crate) fn apply_asset_headers(path: &str, response: &mut Response) {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    if let Some(kind) = asset_content_type(path) {
+        headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(kind));
+    }
 }
 
-/// Ensure `.wasm` responses advertise `application/wasm` (Trunk hashed assets).
-async fn wasm_content_type(
-    req: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> Response {
-    let is_wasm = req
-        .uri()
-        .path()
-        .rsplit('.')
-        .next()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("wasm"));
-    let mut response = next.run(req).await;
-    if is_wasm {
-        response.headers_mut().insert(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/wasm"),
-        );
+fn asset_content_type(path: &str) -> Option<&'static str> {
+    let ext = path.rsplit('.').next()?;
+    if ext.eq_ignore_ascii_case("wasm") {
+        Some("application/wasm")
+    } else if ext.eq_ignore_ascii_case("js") || ext.eq_ignore_ascii_case("mjs") {
+        Some("text/javascript")
+    } else {
+        None
     }
-    response
 }
 
 const PLACEHOLDER_HTML: &str = r#"<!DOCTYPE html>
@@ -261,7 +248,8 @@ const PLACEHOLDER_HTML: &str = r#"<!DOCTYPE html>
 </head>
 <body>
   <main>
-    <h1>FigCraft host is running</h1>
+    <h1>FigCraft (ACowork)</h1>
+    <p>ACowork hosted adaptation of FigCraft by the ArtCraft team. Not an ArtCraft product.</p>
     <p>This process answers <code>/health</code> and <code>/ui/</code> for ACowork.
        Pack the Trunk build of <code>figcraft-web</code> into the package <code>ui/</code>
        directory to replace this placeholder.</p>
@@ -302,4 +290,209 @@ fn spawn_gateway_health_watchdog(health_url: String, interval: Duration, timeout
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn package_ui_sits_beside_the_binary() {
+        let exe = Path::new("versions/0.18.1/bin/figcraft-acowork.exe");
+        let ui = ui_dir_beside_binary(exe);
+        assert_eq!(ui, Path::new("versions/0.18.1/bin/../ui"));
+    }
+
+    #[test]
+    fn script_and_wasm_types_are_explicit() {
+        assert_eq!(
+            asset_content_type("/ui/figcraft-web-abc.js"),
+            Some("text/javascript")
+        );
+        assert_eq!(
+            asset_content_type("/ui/figcraft-web-abc_bg.wasm"),
+            Some("application/wasm")
+        );
+        assert_eq!(asset_content_type("/ui/index.html"), None);
+    }
+
+    #[tokio::test]
+    async fn ui_assets_allow_an_opaque_iframe_to_load_them() {
+        let dir = std::env::temp_dir().join(format!(
+            "figcraft-acowork-ui-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), b"<html>figcraft</html>").unwrap();
+        std::fs::write(dir.join("app.js"), b"export default 1;\n").unwrap();
+        std::fs::write(dir.join("app.wasm"), b"\0asm").unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        McpHub::spawn().unwrap().install();
+        let app = build_router(&dir);
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let base = format!("http://{addr}");
+
+        let js = client
+            .get(format!("{base}/ui/app.js"))
+            .send()
+            .await
+            .unwrap();
+        assert!(js.status().is_success());
+        assert_eq!(header_str(js.headers(), "access-control-allow-origin"), "*");
+        assert_eq!(header_str(js.headers(), "content-type"), "text/javascript");
+
+        let wasm = client
+            .get(format!("{base}/ui/app.wasm"))
+            .send()
+            .await
+            .unwrap();
+        assert!(wasm.status().is_success());
+        assert_eq!(header_str(wasm.headers(), "content-type"), "application/wasm");
+        assert_eq!(header_str(wasm.headers(), "access-control-allow-origin"), "*");
+
+        let page = client.get(format!("{base}/ui/")).send().await.unwrap();
+        assert!(page.status().is_success());
+        assert_eq!(header_str(page.headers(), "access-control-allow-origin"), "*");
+        let html = page.text().await.unwrap();
+        assert!(html.contains("data-acowork-bridge"), "{html}");
+        assert!(html.contains("view.themeDark"), "{html}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn mcp_lists_tools_and_refuses_writes_without_workspace() {
+        let dir = std::env::temp_dir().join(format!(
+            "figcraft-acowork-mcp-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        McpHub::spawn().unwrap().install();
+        let app = build_router(&dir);
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let url = format!("http://{addr}/mcp");
+
+        let listed = client
+            .post(&url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": {}
+            }))
+            .send()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let tools = listed["result"]["tools"].as_array().cloned().unwrap_or_default();
+        assert!(
+            tools.iter().any(|t| t["name"] == "open_file"),
+            "{listed}"
+        );
+        assert!(
+            tools.iter().any(|t| t["name"] == "save_file"),
+            "{listed}"
+        );
+
+        let denied = client
+            .post(&url)
+            .header("X-MCP-Actor", "inst-test")
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "save_file", "arguments": {"path": "a.figcraft"}}
+            }))
+            .send()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let message = denied["error"]["message"].as_str().unwrap_or_default();
+        assert!(
+            message.contains("X-MCP-Workspace-Root"),
+            "{denied}"
+        );
+
+        let ws = dir.join("workspace");
+        std::fs::create_dir_all(&ws).unwrap();
+        let outside = dir.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+
+        let escaped = client
+            .post(&url)
+            .header("X-MCP-Actor", "inst-test")
+            .header("X-MCP-Workspace-Root", ws.to_string_lossy().as_ref())
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "save_file",
+                    "arguments": {"path": outside.join("stolen.figcraft").to_string_lossy()}
+                }
+            }))
+            .send()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        let err_text = escaped.to_string();
+        assert!(
+            err_text.contains("automation path rejected")
+                || escaped["result"]["isError"] == true
+                || escaped.get("error").is_some(),
+            "{escaped}"
+        );
+        assert!(!outside.join("stolen.figcraft").exists());
+
+        let saved = client
+            .post(&url)
+            .header("X-MCP-Actor", "inst-test")
+            .header("X-MCP-Workspace-Root", ws.to_string_lossy().as_ref())
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {
+                    "name": "save_file",
+                    "arguments": {"path": "ok.figcraft"}
+                }
+            }))
+            .send()
+            .await
+            .unwrap()
+            .json::<serde_json::Value>()
+            .await
+            .unwrap();
+        assert!(
+            saved.get("error").is_none() && saved["result"]["isError"] != true,
+            "{saved}"
+        );
+        assert!(ws.join("ok.figcraft").is_file());
+    }
+
+    fn header_str(headers: &reqwest::header::HeaderMap, name: &str) -> String {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string()
+    }
 }

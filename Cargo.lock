@@ -2001,8 +2001,11 @@ name = "figcraft-acowork"
 version = "0.18.1"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "clap",
  "env_logger",
+ "figcraft-engine",
+ "figcraft-mcp",
  "log",
  "reqwest",
  "serde_json",
