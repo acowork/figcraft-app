@@ -18,7 +18,7 @@ const BRIDGE_STYLE: &str = r#"<style data-acowork-bridge="1">html,body{color-sch
 
 /// Injected into served HTML. Enables `?control` (so `window.figcraft` exists)
 /// then maps ACowork theme / openFile messages onto the page command API.
-const BRIDGE_SCRIPT: &str = r#"<script data-acowork-bridge="1">
+const BRIDGE_SCRIPT: &str = r##"<script data-acowork-bridge="1">
 (function(){
   var u=new URL(location.href);
   if(!u.searchParams.has("control")){
@@ -67,7 +67,7 @@ const BRIDGE_SCRIPT: &str = r#"<script data-acowork-bridge="1">
   window.addEventListener("message",function(e){applyTheme(e.data);applyOpen(e.data);});
   try{window.parent.postMessage({channel:"acowork",type:"ready"},"*");}catch(e){}
 })();
-</script>"#;
+</script>"##;
 
 /// Insert the ACowork bridge script into an HTML document.
 pub fn inject_acowork_bridge(html: &str) -> String {
